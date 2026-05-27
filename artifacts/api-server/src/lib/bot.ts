@@ -1,8 +1,15 @@
 import TelegramBot from "node-telegram-bot-api";
 import Groq from "groq-sdk";
 import https from "https";
-import { search, SafeSearchType } from "duck-duck-scrape";
+import { execFile } from "child_process";
+import { promisify } from "util";
+import { fileURLToPath } from "url";
+import path from "path";
 import { logger } from "./logger";
+
+const execFileAsync = promisify(execFile);
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const SEARCH_SCRIPT = path.join(__dirname, "search.py");
 
 const groqApiKey = process.env["GROQ_API_KEY"];
 if (!groqApiKey) throw new Error("GROQ_API_KEY environment variable is required.");
@@ -36,24 +43,21 @@ function extractSearchQuery(text: string): string {
     .trim();
 }
 
-// ─── DuckDuckGo search ────────────────────────────────────────────────────────
+// ─── DuckDuckGo search via Python ─────────────────────────────────────────────
 async function webSearch(query: string): Promise<string> {
-  const results = await search(query, {
-    safeSearch: SafeSearchType.MODERATE,
+  const { stdout, stderr } = await execFileAsync("python3", [SEARCH_SCRIPT, query], {
+    timeout: 20000,
   });
 
-  const snippets: string[] = [];
+  if (stderr) logger.warn({ stderr }, "Search script stderr");
 
-  if (results.noResults) return "";
+  const results: { title: string; body: string; href: string }[] = JSON.parse(stdout || "[]");
 
-  // Collect top results
-  for (const r of results.results.slice(0, 5)) {
-    if (r.title && r.description) {
-      snippets.push(`• ${r.title}: ${r.description}`);
-    }
-  }
+  if (results.length === 0) return "";
 
-  return snippets.join("\n");
+  return results
+    .map((r) => `• ${r.title}: ${r.body}`)
+    .join("\n");
 }
 
 // ─── Summarize search results with Groq ───────────────────────────────────────
