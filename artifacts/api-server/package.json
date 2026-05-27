@@ -15,6 +15,7 @@
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
     "drizzle-orm": "catalog:",
+    "duck-duck-scrape": "^2.2.7",
     "express": "^5.2.1",
     "groq-sdk": "^1.2.0",
     "node-telegram-bot-api": "^0.67.0",

@@ -1,6 +1,7 @@
 import TelegramBot from "node-telegram-bot-api";
 import Groq from "groq-sdk";
 import https from "https";
+import { search, SafeSearchType } from "duck-duck-scrape";
 import { logger } from "./logger";
 
 const groqApiKey = process.env["GROQ_API_KEY"];
@@ -13,16 +14,70 @@ if (!token) throw new Error("TELEGRAM_BOT_TOKEN environment variable is required
 const bot = new TelegramBot(token, { polling: true });
 logger.info("NexusBot_777_bot запускается...");
 
-// ─── Download image to base64 ─────────────────────────────────────────────────
-async function downloadImageAsBase64(url: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    https.get(url, (res) => {
-      const chunks: Buffer[] = [];
-      res.on("data", (chunk: Buffer) => chunks.push(chunk));
-      res.on("end", () => resolve(Buffer.concat(chunks).toString("base64")));
-      res.on("error", reject);
-    }).on("error", reject);
+// ─── Search intent detection ───────────────────────────────────────────────────
+const SEARCH_PATTERNS = [
+  /^(найди|поищи|погугли|найти|search|ищи|поиск)\s+/i,
+  /что (сейчас|сегодня|происходит|нового|случилось|творится)/i,
+  /последние новости/i,
+  /актуальн(ый|ая|ое|ые)/i,
+  /курс (доллара|евро|рубля|биткоина|валют)/i,
+  /цена (на|сейчас)/i,
+  /кто такой .+\?$/i,
+  /что за .+\?$/i,
+];
+
+function isSearchQuery(text: string): boolean {
+  return SEARCH_PATTERNS.some((p) => p.test(text));
+}
+
+function extractSearchQuery(text: string): string {
+  return text
+    .replace(/^(найди|поищи|погугли|найти|search|ищи|поиск)\s+/i, "")
+    .trim();
+}
+
+// ─── DuckDuckGo search ────────────────────────────────────────────────────────
+async function webSearch(query: string): Promise<string> {
+  const results = await search(query, {
+    safeSearch: SafeSearchType.MODERATE,
   });
+
+  const snippets: string[] = [];
+
+  if (results.noResults) return "";
+
+  // Collect top results
+  for (const r of results.results.slice(0, 5)) {
+    if (r.title && r.description) {
+      snippets.push(`• ${r.title}: ${r.description}`);
+    }
+  }
+
+  return snippets.join("\n");
+}
+
+// ─── Summarize search results with Groq ───────────────────────────────────────
+async function summarizeSearchResults(query: string, snippets: string, userName: string): Promise<string> {
+  const completion = await groq.chat.completions.create({
+    model: "llama-3.1-8b-instant",
+    messages: [
+      {
+        role: "system",
+        content:
+          `Ты умный помощник NexusBot_777. Отвечай ТОЛЬКО на русском языке. ` +
+          `Пользователя зовут ${userName}. ` +
+          `Тебе дан запрос пользователя и результаты поиска из интернета. ` +
+          `Составь краткий, понятный и полезный ответ на русском языке на основе этих данных. ` +
+          `Используй эмодзи. Если результаты содержат актуальные данные — обязательно их упомяни.`,
+      },
+      {
+        role: "user",
+        content: `Запрос: "${query}"\n\nРезультаты поиска:\n${snippets}`,
+      },
+    ],
+    max_tokens: 600,
+  });
+  return completion.choices[0]?.message?.content ?? "😅 Не смог обработать результаты поиска.";
 }
 
 // ─── AI text response ─────────────────────────────────────────────────────────
@@ -57,14 +112,8 @@ async function getVisionResponse(base64Image: string, caption: string | undefine
       {
         role: "user",
         content: [
-          {
-            type: "image_url",
-            image_url: { url: `data:image/jpeg;base64,${base64Image}` },
-          },
-          {
-            type: "text",
-            text: userPrompt,
-          },
+          { type: "image_url", image_url: { url: `data:image/jpeg;base64,${base64Image}` } },
+          { type: "text", text: userPrompt },
         ],
       },
     ],
@@ -73,20 +122,33 @@ async function getVisionResponse(base64Image: string, caption: string | undefine
   return completion.choices[0]?.message?.content ?? "😅 Не удалось распознать изображение, попробуй ещё раз!";
 }
 
+// ─── Download image to base64 ─────────────────────────────────────────────────
+async function downloadImageAsBase64(url: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    https.get(url, (res) => {
+      const chunks: Buffer[] = [];
+      res.on("data", (chunk: Buffer) => chunks.push(chunk));
+      res.on("end", () => resolve(Buffer.concat(chunks).toString("base64")));
+      res.on("error", reject);
+    }).on("error", reject);
+  });
+}
+
 // ─── /start ───────────────────────────────────────────────────────────────────
 bot.onText(/\/start/, async (msg) => {
   const name = msg.from?.first_name ?? "друг";
   await bot.sendMessage(
     msg.chat.id,
-    `🌟 *Привет, ${escapeMarkdown(name)}\\!* Я *NexusBot\\_777* — твой умный ИИ\\-помощник\\.\n\n` +
+    `🌟 *Привет, ${escapeMarkdown(name)}!* Я *NexusBot\\_777* — твой умный ИИ-помощник.\n\n` +
     `🤖 Я умею:\n` +
     `• 💬 Отвечать на любые вопросы\n` +
+    `• 🔍 Искать информацию в интернете\n` +
     `• 🖼️ Анализировать и описывать фотографии\n\n` +
     `📋 *Команды:*\n` +
     `/start — приветствие\n` +
     `/help — помощь\n\n` +
-    `✨ Напиши вопрос или отправь фото — я отвечу\\!`,
-    { parse_mode: "MarkdownV2" },
+    `✨ Напиши вопрос, попроси найти что-нибудь или отправь фото!`,
+    { parse_mode: "Markdown" },
   );
 });
 
@@ -95,43 +157,38 @@ bot.onText(/\/help/, async (msg) => {
   await bot.sendMessage(
     msg.chat.id,
     `🤖 *NexusBot\\_777 — Помощь*\n\n` +
-    `Я умный бот на базе ИИ\\. Задай вопрос или отправь фото\\!\n\n` +
     `📋 *Команды:*\n` +
     `/start — приветственное сообщение\n` +
     `/help — эта справка\n\n` +
-    `💬 *Примеры вопросов:*\n` +
-    `• Что такое чёрная дыра\\?\n` +
-    `• Как приготовить борщ\\?\n` +
-    `• Расскажи анекдот\n\n` +
-    `🖼️ *Распознавание изображений:*\n` +
-    `Отправь мне любое фото и я подробно опишу что на нём изображено\\. Можешь добавить подпись к фото с уточняющим вопросом\\!`,
-    { parse_mode: "MarkdownV2" },
+    `💬 *ИИ-ответы на вопросы:*\n` +
+    `Просто напиши мне что-нибудь и я отвечу!\n\n` +
+    `🔍 *Веб-поиск:*\n` +
+    `Начни с "найди", "поищи" или спроси о текущих событиях:\n` +
+    `• _найди рецепт пиццы_\n` +
+    `• _поищи курс доллара_\n` +
+    `• _что сейчас происходит в мире?_\n\n` +
+    `🖼️ *Анализ фото:*\n` +
+    `Отправь любое фото — опишу что на нём!`,
+    { parse_mode: "Markdown" },
   );
 });
 
 // ─── Photo handler ────────────────────────────────────────────────────────────
 bot.on("photo", async (msg) => {
   const chatId = msg.chat.id;
-
   try {
     await bot.sendChatAction(chatId, "typing");
-
-    // Pick the highest-resolution photo
-    const photos = msg.photo!;
-    const bestPhoto = photos[photos.length - 1];
+    const bestPhoto = msg.photo![msg.photo!.length - 1];
     const fileLink = await bot.getFileLink(bestPhoto.file_id);
-
     const base64 = await downloadImageAsBase64(fileLink);
     const reply = await getVisionResponse(base64, msg.caption);
-
     await bot.sendMessage(chatId, `🖼️ *Анализ изображения:*\n\n${reply}`, { parse_mode: "Markdown" });
   } catch (err: any) {
     logger.error({ err }, "Vision API error");
     const isModelError = err?.error?.error?.code === "model_decommissioned" || err?.status === 400;
     if (isModelError) {
-      await bot.sendMessage(
-        chatId,
-        "🖼️ Распознавание изображений временно недоступно — Groq обновляет свои модели компьютерного зрения.\n\n⏳ Функция скоро вернётся! А пока можешь задать мне любой текстовый вопрос. 😊",
+      await bot.sendMessage(chatId,
+        "🖼️ Распознавание изображений временно недоступно.\n\n⏳ Функция скоро вернётся! А пока задай мне любой текстовый вопрос. 😊"
       );
     } else {
       await bot.sendMessage(chatId, "😅 Не удалось проанализировать изображение. Попробуй ещё раз позже!");
@@ -148,8 +205,33 @@ bot.on("message", async (msg) => {
 
   logger.info({ chatId, text: msg.text }, "Received message");
 
+  await bot.sendChatAction(chatId, "typing");
+
+  // Route to web search if intent detected
+  if (isSearchQuery(msg.text)) {
+    try {
+      const query = extractSearchQuery(msg.text);
+      await bot.sendMessage(chatId, `🔍 Ищу: _${escapeMarkdown(query)}_...`, { parse_mode: "Markdown" });
+      await bot.sendChatAction(chatId, "typing");
+
+      const snippets = await webSearch(query);
+
+      if (!snippets) {
+        await bot.sendMessage(chatId, "😔 Ничего не нашёл по этому запросу. Попробуй сформулировать иначе.");
+        return;
+      }
+
+      const summary = await summarizeSearchResults(query, snippets, userName);
+      await bot.sendMessage(chatId, `🔍 *Результаты поиска:*\n\n${summary}`, { parse_mode: "Markdown" });
+    } catch (err) {
+      logger.error({ err }, "Search error");
+      await bot.sendMessage(chatId, "😅 Не удалось выполнить поиск. Попробуй ещё раз!");
+    }
+    return;
+  }
+
+  // Regular AI response
   try {
-    await bot.sendChatAction(chatId, "typing");
     const reply = await getAIResponse(msg.text, userName);
     await bot.sendMessage(chatId, reply);
   } catch (err) {
