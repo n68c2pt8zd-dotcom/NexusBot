@@ -126,16 +126,32 @@ async function getVisionResponse(base64Image: string, caption: string | undefine
   return completion.choices[0]?.message?.content ?? "😅 Не удалось распознать изображение, попробуй ещё раз!";
 }
 
-// ─── Download image to base64 ─────────────────────────────────────────────────
-async function downloadImageAsBase64(url: string): Promise<string> {
+// ─── Download file as Buffer ───────────────────────────────────────────────────
+async function downloadBuffer(url: string): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     https.get(url, (res) => {
       const chunks: Buffer[] = [];
       res.on("data", (chunk: Buffer) => chunks.push(chunk));
-      res.on("end", () => resolve(Buffer.concat(chunks).toString("base64")));
+      res.on("end", () => resolve(Buffer.concat(chunks)));
       res.on("error", reject);
     }).on("error", reject);
   });
+}
+
+async function downloadImageAsBase64(url: string): Promise<string> {
+  return (await downloadBuffer(url)).toString("base64");
+}
+
+// ─── Transcribe voice via Groq Whisper ────────────────────────────────────────
+async function transcribeVoice(buffer: Buffer, mimeType = "audio/ogg"): Promise<string> {
+  const file = new File([buffer], "voice.ogg", { type: mimeType });
+  const transcription = await groq.audio.transcriptions.create({
+    file,
+    model: "whisper-large-v3",
+    response_format: "json",
+    language: "ru",
+  });
+  return transcription.text.trim();
 }
 
 // ─── /start ───────────────────────────────────────────────────────────────────
@@ -147,11 +163,12 @@ bot.onText(/\/start/, async (msg) => {
     `🤖 Я умею:\n` +
     `• 💬 Отвечать на любые вопросы\n` +
     `• 🔍 Искать информацию в интернете\n` +
-    `• 🖼️ Анализировать и описывать фотографии\n\n` +
+    `• 🖼️ Анализировать и описывать фотографии\n` +
+    `• 🎙️ Распознавать голосовые сообщения\n\n` +
     `📋 *Команды:*\n` +
     `/start — приветствие\n` +
     `/help — помощь\n\n` +
-    `✨ Напиши вопрос, попроси найти что-нибудь или отправь фото!`,
+    `✨ Напиши вопрос, отправь голосовое или фото — я отвечу!`,
     { parse_mode: "Markdown" },
   );
 });
@@ -164,17 +181,63 @@ bot.onText(/\/help/, async (msg) => {
     `📋 *Команды:*\n` +
     `/start — приветственное сообщение\n` +
     `/help — эта справка\n\n` +
-    `💬 *ИИ-ответы на вопросы:*\n` +
+    `💬 *ИИ-ответы:*\n` +
     `Просто напиши мне что-нибудь и я отвечу!\n\n` +
     `🔍 *Веб-поиск:*\n` +
-    `Начни с "найди", "поищи" или спроси о текущих событиях:\n` +
     `• _найди рецепт пиццы_\n` +
     `• _поищи курс доллара_\n` +
     `• _что сейчас происходит в мире?_\n\n` +
+    `🎙️ *Голосовые сообщения:*\n` +
+    `Отправь голосовое — я расшифрую и отвечу!\n\n` +
     `🖼️ *Анализ фото:*\n` +
     `Отправь любое фото — опишу что на нём!`,
     { parse_mode: "Markdown" },
   );
+});
+
+// ─── Voice handler ────────────────────────────────────────────────────────────
+bot.on("voice", async (msg) => {
+  const chatId = msg.chat.id;
+  const userName = msg.from?.first_name ?? msg.from?.username ?? "друг";
+
+  try {
+    await bot.sendChatAction(chatId, "typing");
+
+    const fileLink = await bot.getFileLink(msg.voice!.file_id);
+    const buffer = await downloadBuffer(fileLink);
+    const transcribed = await transcribeVoice(buffer);
+
+    if (!transcribed) {
+      await bot.sendMessage(chatId, "😔 Не удалось распознать голос. Попробуй ещё раз или напиши текстом.");
+      return;
+    }
+
+    logger.info({ chatId, transcribed }, "Voice transcribed");
+
+    // Echo transcription back so user knows what was heard
+    await bot.sendMessage(chatId, `🎙️ *Я услышал:* _${escapeMarkdown(transcribed)}_`, { parse_mode: "Markdown" });
+    await bot.sendChatAction(chatId, "typing");
+
+    // Process the transcribed text exactly like a regular message
+    if (isSearchQuery(transcribed)) {
+      const query = extractSearchQuery(transcribed);
+      await bot.sendMessage(chatId, `🔍 Ищу: _${escapeMarkdown(query)}_...`, { parse_mode: "Markdown" });
+      await bot.sendChatAction(chatId, "typing");
+      const snippets = await webSearch(query);
+      if (!snippets) {
+        await bot.sendMessage(chatId, "😔 Ничего не нашёл по этому запросу.");
+        return;
+      }
+      const summary = await summarizeSearchResults(query, snippets, userName);
+      await bot.sendMessage(chatId, `🔍 *Результаты поиска:*\n\n${summary}`, { parse_mode: "Markdown" });
+    } else {
+      const reply = await getAIResponse(transcribed, userName);
+      await bot.sendMessage(chatId, reply);
+    }
+  } catch (err) {
+    logger.error({ err }, "Voice handler error");
+    await bot.sendMessage(chatId, "😅 Не удалось обработать голосовое сообщение. Попробуй ещё раз!");
+  }
 });
 
 // ─── Photo handler ────────────────────────────────────────────────────────────
