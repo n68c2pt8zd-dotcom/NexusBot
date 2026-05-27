@@ -1,5 +1,6 @@
 import TelegramBot from "node-telegram-bot-api";
 import Groq from "groq-sdk";
+import https from "https";
 import { logger } from "./logger";
 
 const groqApiKey = process.env["GROQ_API_KEY"];
@@ -12,7 +13,19 @@ if (!token) throw new Error("TELEGRAM_BOT_TOKEN environment variable is required
 const bot = new TelegramBot(token, { polling: true });
 logger.info("NexusBot_777_bot запускается...");
 
-// ─── AI response ──────────────────────────────────────────────────────────────
+// ─── Download image to base64 ─────────────────────────────────────────────────
+async function downloadImageAsBase64(url: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    https.get(url, (res) => {
+      const chunks: Buffer[] = [];
+      res.on("data", (chunk: Buffer) => chunks.push(chunk));
+      res.on("end", () => resolve(Buffer.concat(chunks).toString("base64")));
+      res.on("error", reject);
+    }).on("error", reject);
+  });
+}
+
+// ─── AI text response ─────────────────────────────────────────────────────────
 async function getAIResponse(userMessage: string, userName: string): Promise<string> {
   const completion = await groq.chat.completions.create({
     model: "llama-3.1-8b-instant",
@@ -32,18 +45,48 @@ async function getAIResponse(userMessage: string, userName: string): Promise<str
   return completion.choices[0]?.message?.content ?? "😅 Не смог придумать ответ, попробуй ещё раз!";
 }
 
+// ─── AI vision response ───────────────────────────────────────────────────────
+async function getVisionResponse(base64Image: string, caption: string | undefined): Promise<string> {
+  const userPrompt = caption
+    ? `Опиши что изображено на фото. Также учти подпись пользователя: "${caption}"`
+    : "Подробно опиши что изображено на этом фото на русском языке.";
+
+  const completion = await groq.chat.completions.create({
+    model: "llama-3.2-11b-vision-preview",
+    messages: [
+      {
+        role: "user",
+        content: [
+          {
+            type: "image_url",
+            image_url: { url: `data:image/jpeg;base64,${base64Image}` },
+          },
+          {
+            type: "text",
+            text: userPrompt,
+          },
+        ],
+      },
+    ],
+    max_tokens: 1024,
+  });
+  return completion.choices[0]?.message?.content ?? "😅 Не удалось распознать изображение, попробуй ещё раз!";
+}
+
 // ─── /start ───────────────────────────────────────────────────────────────────
 bot.onText(/\/start/, async (msg) => {
   const name = msg.from?.first_name ?? "друг";
   await bot.sendMessage(
     msg.chat.id,
-    `🌟 *Привет, ${escapeMarkdown(name)}!* Я *NexusBot\\_777* — твой умный помощник.\n\n` +
-    `🤖 Спроси меня что угодно — я отвечу на русском языке.\n\n` +
-    `📋 Команды:\n` +
+    `🌟 *Привет, ${escapeMarkdown(name)}\\!* Я *NexusBot\\_777* — твой умный ИИ\\-помощник\\.\n\n` +
+    `🤖 Я умею:\n` +
+    `• 💬 Отвечать на любые вопросы\n` +
+    `• 🖼️ Анализировать и описывать фотографии\n\n` +
+    `📋 *Команды:*\n` +
     `/start — приветствие\n` +
     `/help — помощь\n\n` +
-    `💬 Просто напиши мне сообщение и я отвечу!`,
-    { parse_mode: "Markdown" },
+    `✨ Напиши вопрос или отправь фото — я отвечу\\!`,
+    { parse_mode: "MarkdownV2" },
   );
 });
 
@@ -52,21 +95,43 @@ bot.onText(/\/help/, async (msg) => {
   await bot.sendMessage(
     msg.chat.id,
     `🤖 *NexusBot\\_777 — Помощь*\n\n` +
-    `Я умный бот на базе ИИ. Задай мне любой вопрос и я отвечу на русском языке.\n\n` +
+    `Я умный бот на базе ИИ\\. Задай вопрос или отправь фото\\!\n\n` +
     `📋 *Команды:*\n` +
     `/start — приветственное сообщение\n` +
     `/help — эта справка\n\n` +
-    `💡 *Примеры вопросов:*\n` +
-    `• Что такое чёрная дыра?\n` +
-    `• Как приготовить борщ?\n` +
-    `• Расскажи анекдот\n` +
-    `• Переведи "hello world" на русский\n\n` +
-    `✨ Просто напиши — и я отвечу!`,
-    { parse_mode: "Markdown" },
+    `💬 *Примеры вопросов:*\n` +
+    `• Что такое чёрная дыра\\?\n` +
+    `• Как приготовить борщ\\?\n` +
+    `• Расскажи анекдот\n\n` +
+    `🖼️ *Распознавание изображений:*\n` +
+    `Отправь мне любое фото и я подробно опишу что на нём изображено\\. Можешь добавить подпись к фото с уточняющим вопросом\\!`,
+    { parse_mode: "MarkdownV2" },
   );
 });
 
-// ─── Main message handler ─────────────────────────────────────────────────────
+// ─── Photo handler ────────────────────────────────────────────────────────────
+bot.on("photo", async (msg) => {
+  const chatId = msg.chat.id;
+
+  try {
+    await bot.sendChatAction(chatId, "typing");
+
+    // Pick the highest-resolution photo
+    const photos = msg.photo!;
+    const bestPhoto = photos[photos.length - 1];
+    const fileLink = await bot.getFileLink(bestPhoto.file_id);
+
+    const base64 = await downloadImageAsBase64(fileLink);
+    const reply = await getVisionResponse(base64, msg.caption);
+
+    await bot.sendMessage(chatId, `🖼️ *Анализ изображения:*\n\n${reply}`, { parse_mode: "Markdown" });
+  } catch (err) {
+    logger.error({ err }, "Vision API error");
+    await bot.sendMessage(chatId, "😅 Не удалось проанализировать изображение. Попробуй отправить другое фото!");
+  }
+});
+
+// ─── Text message handler ─────────────────────────────────────────────────────
 bot.on("message", async (msg) => {
   if (!msg.text || msg.text.startsWith("/")) return;
 
