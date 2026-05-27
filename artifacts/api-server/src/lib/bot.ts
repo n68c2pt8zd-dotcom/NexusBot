@@ -52,7 +52,7 @@ async function getVisionResponse(base64Image: string, caption: string | undefine
     : "Подробно опиши что изображено на этом фото на русском языке.";
 
   const completion = await groq.chat.completions.create({
-    model: "llama-3.2-11b-vision-preview",
+    model: "meta-llama/llama-4-scout-17b-16e-instruct",
     messages: [
       {
         role: "user",
@@ -125,9 +125,17 @@ bot.on("photo", async (msg) => {
     const reply = await getVisionResponse(base64, msg.caption);
 
     await bot.sendMessage(chatId, `🖼️ *Анализ изображения:*\n\n${reply}`, { parse_mode: "Markdown" });
-  } catch (err) {
+  } catch (err: any) {
     logger.error({ err }, "Vision API error");
-    await bot.sendMessage(chatId, "😅 Не удалось проанализировать изображение. Попробуй отправить другое фото!");
+    const isModelError = err?.error?.error?.code === "model_decommissioned" || err?.status === 400;
+    if (isModelError) {
+      await bot.sendMessage(
+        chatId,
+        "🖼️ Распознавание изображений временно недоступно — Groq обновляет свои модели компьютерного зрения.\n\n⏳ Функция скоро вернётся! А пока можешь задать мне любой текстовый вопрос. 😊",
+      );
+    } else {
+      await bot.sendMessage(chatId, "😅 Не удалось проанализировать изображение. Попробуй ещё раз позже!");
+    }
   }
 });
 
