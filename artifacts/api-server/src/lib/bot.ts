@@ -1,8 +1,13 @@
 import TelegramBot from "node-telegram-bot-api";
+import Groq from "groq-sdk";
 import { logger } from "./logger";
 import { db } from "@workspace/db";
 import { botUsersTable } from "@workspace/db";
 import { eq, desc } from "drizzle-orm";
+
+const groqApiKey = process.env["GROQ_API_KEY"];
+if (!groqApiKey) throw new Error("GROQ_API_KEY environment variable is required.");
+const groq = new Groq({ apiKey: groqApiKey });
 
 const token = process.env["TELEGRAM_BOT_TOKEN"];
 if (!token) throw new Error("TELEGRAM_BOT_TOKEN environment variable is required.");
@@ -38,69 +43,25 @@ function checkNewAchievements(user: { points: number; messageCount: number; achi
   return newOnes;
 }
 
-// ─── Smart predefined responses ───────────────────────────────────────────────
-function getSmartResponse(text: string): string {
-  const t = text.toLowerCase();
-
-  if (/привет|хай|hello|hi|здравствуй/.test(t))
-    return "👋 Привет! Рад тебя видеть! Чем могу помочь?";
-  if (/как дела|как ты|как жизнь/.test(t))
-    return "😊 Всё отлично, спасибо что спрашиваешь! А у тебя как дела?";
-  if (/что умеешь|что ты умеешь|что можешь/.test(t))
-    return "🤖 Я умею отвечать на вопросы, вести статистику твоих сообщений и начислять очки! Используй /help чтобы узнать больше.";
-  if (/кто ты|кто создал|кто тебя|чей бот/.test(t))
-    return "🤖 Я — NexusBot_777! Умный бот с системой наград и уровней. Пиши мне почаще — зарабатывай очки!";
-  if (/погода/.test(t))
-    return "☁️ К сожалению, я не умею проверять погоду, но могу подсказать: погляди в окно! 😄";
-  if (/время|который час|сколько время/.test(t)) {
-    const now = new Date().toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Moscow" });
-    return `🕐 Московское время: *${now}*`;
-  }
-  if (/дата|какое число|какой день/.test(t)) {
-    const now = new Date().toLocaleDateString("ru-RU", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "Europe/Moscow" });
-    return `📅 Сегодня: *${now}*`;
-  }
-  if (/шутк|расскажи анекдот|анекдот/.test(t)) {
-    const jokes = [
-      "😂 Программист заходит в лифт. Его спрашивают: «На какой этаж?» Он отвечает: «Мне на 4-й». Лифт едет на 1-й. Оказывается, ноль-индексация!",
-      "😄 Почему программисты путают Хэллоуин и Рождество? Потому что Oct 31 = Dec 25!",
-      "🤣 Сколько программистов нужно, чтобы поменять лампочку? Ни одного — это проблема железа!"
-    ];
-    return jokes[Math.floor(Math.random() * jokes.length)];
-  }
-  if (/факт|интересно|расскажи что-нибудь/.test(t)) {
-    const facts = [
-      "🧠 Мозг человека генерирует около 70 000 мыслей в день!",
-      "🌍 На Земле больше деревьев, чем звёзд в Млечном Пути.",
-      "🐙 У осьминога три сердца и голубая кровь.",
-      "⚡ Молния горячее поверхности Солнца в 5 раз.",
-      "🍯 Мёд никогда не портится — в египетских гробницах нашли мёд возрастом 3000 лет!"
-    ];
-    return facts[Math.floor(Math.random() * facts.length)];
-  }
-  if (/спасибо|благодарю|thanks/.test(t))
-    return "😊 Пожалуйста! Всегда рад помочь! Продолжай писать — зарабатывай очки!";
-  if (/пока|до свидания|bye|чао/.test(t))
-    return "👋 До свидания! Возвращайся скорее — тебя ждут новые очки! 🎯";
-  if (/люблю тебя|ты лучший|ты крутой/.test(t))
-    return "❤️ Ты тоже лучший! Продолжай в том же духе! 🚀";
-  if (/помоги|помощь|не понимаю/.test(t))
-    return "🤝 Конечно помогу! Уточни свой вопрос, и я постараюсь ответить. Или используй /help для списка команд.";
-  if (/очки|баллы|сколько очков/.test(t))
-    return "🏅 Проверь свои очки командой /profile!";
-  if (/уровень|ранг|статус/.test(t))
-    return "🎖️ Посмотри свой уровень командой /profile!";
-  if (/топ|лидеры|рейтинг/.test(t))
-    return "🏆 Смотри таблицу лидеров командой /top!";
-
-  const generic = [
-    "🤔 Интересный вопрос! Я ещё учусь, но стараюсь быть полезным.",
-    "💡 Хм, дай подумаю... Пока не знаю ответа, но ты заработал очки за вопрос!",
-    "😊 Спасибо за сообщение! Каждое слово приближает тебя к новому уровню.",
-    "🚀 Отличное сообщение! Продолжай — очки копятся!",
-    "🎯 Понял тебя! Не забудь проверить /profile — вдруг уже новый уровень?",
-  ];
-  return generic[Math.floor(Math.random() * generic.length)];
+// ─── Groq AI response ─────────────────────────────────────────────────────────
+async function getAIResponse(userMessage: string, userName: string): Promise<string> {
+  const completion = await groq.chat.completions.create({
+    model: "llama3-8b-8192",
+    messages: [
+      {
+        role: "system",
+        content:
+          `Ты умный и дружелюбный Telegram-бот NexusBot_777. ` +
+          `Отвечай ТОЛЬКО на русском языке. Будь полезным, кратким и позитивным. ` +
+          `Используй эмодзи где уместно. Пользователя зовут ${userName}. ` +
+          `Не упоминай, что ты языковая модель или ИИ — просто отвечай как умный бот-помощник. ` +
+          `Если спрашивают про очки, уровни или рейтинг — направь к командам /profile, /top, /rewards.`,
+      },
+      { role: "user", content: userMessage },
+    ],
+    max_tokens: 512,
+  });
+  return completion.choices[0]?.message?.content ?? "😅 Не смог придумать ответ, попробуй ещё раз!";
 }
 
 // ─── DB helpers ───────────────────────────────────────────────────────────────
@@ -263,8 +224,15 @@ bot.on("message", async (msg) => {
   const { user, newAchievements } = await addPoints(msg.from!.id, 10);
   const level = getLevel(user.points);
 
-  const reply = getSmartResponse(msg.text);
-  await bot.sendMessage(chatId, reply, { parse_mode: "Markdown" });
+  const userName = msg.from?.first_name ?? msg.from?.username ?? "друг";
+  let reply: string;
+  try {
+    reply = await getAIResponse(msg.text, userName);
+  } catch (err) {
+    logger.error({ err }, "Groq API error");
+    reply = "😅 Что-то пошло не так с ИИ, попробуй ещё раз!";
+  }
+  await bot.sendMessage(chatId, reply);
 
   await bot.sendMessage(chatId, `✨ *+10 очков!* Итого: *${user.points}* | Уровень: ${level.emoji} ${level.name}`, { parse_mode: "Markdown" });
 
