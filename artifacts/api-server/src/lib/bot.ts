@@ -21,6 +21,22 @@ if (!token) throw new Error("TELEGRAM_BOT_TOKEN environment variable is required
 const bot = new TelegramBot(token, { polling: true });
 logger.info("NexusBot_777_bot запускается...");
 
+// ─── Conversation memory (last 10 messages per user) ──────────────────────────
+const MAX_HISTORY = 10;
+type ChatMessage = { role: "user" | "assistant"; content: string };
+const conversationHistory = new Map<number, ChatMessage[]>();
+
+function getHistory(userId: number): ChatMessage[] {
+  return conversationHistory.get(userId) ?? [];
+}
+
+function addToHistory(userId: number, role: "user" | "assistant", content: string): void {
+  const history = conversationHistory.get(userId) ?? [];
+  history.push({ role, content });
+  if (history.length > MAX_HISTORY) history.splice(0, history.length - MAX_HISTORY);
+  conversationHistory.set(userId, history);
+}
+
 // ─── Search intent detection ───────────────────────────────────────────────────
 const SEARCH_PATTERNS = [
   /^(найди|поищи|погугли|найти|search|ищи|поиск)\s+/i,
@@ -85,7 +101,7 @@ async function summarizeSearchResults(query: string, snippets: string, userName:
 }
 
 // ─── AI text response ─────────────────────────────────────────────────────────
-async function getAIResponse(userMessage: string, userName: string): Promise<string> {
+async function getAIResponse(userMessage: string, userName: string, history: ChatMessage[]): Promise<string> {
   const completion = await groq.chat.completions.create({
     model: "llama-3.1-8b-instant",
     messages: [
@@ -97,6 +113,7 @@ async function getAIResponse(userMessage: string, userName: string): Promise<str
           `Используй эмодзи где уместно. Пользователя зовут ${userName}. ` +
           `Не упоминай, что ты языковая модель или ИИ — просто отвечай как умный бот-помощник.`,
       },
+      ...history,
       { role: "user", content: userMessage },
     ],
     max_tokens: 512,
@@ -198,6 +215,7 @@ bot.onText(/\/help/, async (msg) => {
 // ─── Voice handler ────────────────────────────────────────────────────────────
 bot.on("voice", async (msg) => {
   const chatId = msg.chat.id;
+  const userId = msg.from!.id;
   const userName = msg.from?.first_name ?? msg.from?.username ?? "друг";
 
   try {
@@ -214,11 +232,9 @@ bot.on("voice", async (msg) => {
 
     logger.info({ chatId, transcribed }, "Voice transcribed");
 
-    // Echo transcription back so user knows what was heard
     await bot.sendMessage(chatId, `🎙️ *Я услышал:* _${escapeMarkdown(transcribed)}_`, { parse_mode: "Markdown" });
     await bot.sendChatAction(chatId, "typing");
 
-    // Process the transcribed text exactly like a regular message
     if (isSearchQuery(transcribed)) {
       const query = extractSearchQuery(transcribed);
       await bot.sendMessage(chatId, `🔍 Ищу: _${escapeMarkdown(query)}_...`, { parse_mode: "Markdown" });
@@ -230,8 +246,13 @@ bot.on("voice", async (msg) => {
       }
       const summary = await summarizeSearchResults(query, snippets, userName);
       await bot.sendMessage(chatId, `🔍 *Результаты поиска:*\n\n${summary}`, { parse_mode: "Markdown" });
+      addToHistory(userId, "user", transcribed);
+      addToHistory(userId, "assistant", summary);
     } else {
-      const reply = await getAIResponse(transcribed, userName);
+      const history = getHistory(userId);
+      const reply = await getAIResponse(transcribed, userName, history);
+      addToHistory(userId, "user", transcribed);
+      addToHistory(userId, "assistant", reply);
       await bot.sendMessage(chatId, reply);
     }
   } catch (err) {
@@ -268,6 +289,7 @@ bot.on("message", async (msg) => {
   if (!msg.text || msg.text.startsWith("/")) return;
 
   const chatId = msg.chat.id;
+  const userId = msg.from!.id;
   const userName = msg.from?.first_name ?? msg.from?.username ?? "друг";
 
   logger.info({ chatId, text: msg.text }, "Received message");
@@ -290,6 +312,10 @@ bot.on("message", async (msg) => {
 
       const summary = await summarizeSearchResults(query, snippets, userName);
       await bot.sendMessage(chatId, `🔍 *Результаты поиска:*\n\n${summary}`, { parse_mode: "Markdown" });
+
+      // Save search exchange to memory
+      addToHistory(userId, "user", msg.text);
+      addToHistory(userId, "assistant", summary);
     } catch (err) {
       logger.error({ err }, "Search error");
       await bot.sendMessage(chatId, "😅 Не удалось выполнить поиск. Попробуй ещё раз!");
@@ -297,9 +323,12 @@ bot.on("message", async (msg) => {
     return;
   }
 
-  // Regular AI response
+  // Regular AI response with history
   try {
-    const reply = await getAIResponse(msg.text, userName);
+    const history = getHistory(userId);
+    const reply = await getAIResponse(msg.text, userName, history);
+    addToHistory(userId, "user", msg.text);
+    addToHistory(userId, "assistant", reply);
     await bot.sendMessage(chatId, reply);
   } catch (err) {
     logger.error({ err }, "Groq API error");
