@@ -2,11 +2,13 @@ services:
   - type: web
     name: NexusBot
     runtime: node
-    buildCommand: pnpm --filter @workspace/api-server run build && pip install ddgs
+    buildCommand: corepack enable && corepack prepare pnpm@10.26.1 --activate && pnpm install --config.minimumReleaseAge=0 --frozen-lockfile && pnpm --filter @workspace/api-server run build && pip3 install ddgs
     startCommand: node index.js
     envVars:
       - key: NODE_ENV
         value: production
+      - key: NODE_VERSION
+        value: "20"
       - key: TELEGRAM_BOT_TOKEN
         sync: false
       - key: GROQ_API_KEY
