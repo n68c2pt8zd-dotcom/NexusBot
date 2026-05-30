@@ -22,107 +22,110 @@ const bot = new TelegramBot(TELEGRAM_TOKEN, { polling: true });
 console.log('NexusBot_777 starting...');
 
 // ── Language detection ────────────────────────────────────────────────────────
-// Returns: 'ru' | 'uk' | 'kk' | 'en'
 function detectLanguage(text) {
   if (!text || text.trim().length < 2) return null;
-  // Kazakh-unique Cyrillic chars (must check before Ukrainian)
   if (/[әғқңөұүһӘҒҚҢӨҰҮҺ]/.test(text)) return 'kk';
-  // Ukrainian-unique Cyrillic chars
   if (/[їєґЇЄҐ]/.test(text)) return 'uk';
-  // Generic Cyrillic → Russian
   if (/[а-яёА-ЯЁіІ]/.test(text)) return 'ru';
-  // Default to English
   return 'en';
 }
 
 // ── Translations ──────────────────────────────────────────────────────────────
 const T = {
   ru: {
-    systemBot:   name => `Ты умный и дружелюбный Telegram-бот NexusBot_777. Пользователя зовут ${name}. СТРОГИЕ ПРАВИЛА ЯЗЫКА: отвечай ИСКЛЮЧИТЕЛЬНО на русском языке. ЗАПРЕЩЕНО использовать любые английские слова, термины, аббревиатуры или фразы — даже технические. Для любого понятия используй русский эквивалент или опиши по-русски. Будь полезным, кратким и позитивным. Используй эмодзи.`,
+    systemBot:    name => `Ты умный и дружелюбный Telegram-бот NexusBot_777. Пользователя зовут ${name}. СТРОГИЕ ПРАВИЛА ЯЗЫКА: отвечай ИСКЛЮЧИТЕЛЬНО на русском языке. ЗАПРЕЩЕНО использовать любые английские слова, термины, аббревиатуры или фразы — даже технические. Для любого понятия используй русский эквивалент или опиши по-русски. Будь полезным, кратким и позитивным. Используй эмодзи.`,
     systemSearch: name => `Ты помощник NexusBot_777. Пользователя зовут ${name}. СТРОГОЕ ПРАВИЛО: отвечай ИСКЛЮЧИТЕЛЬНО на русском языке, без единого английского слова. Составь краткий ответ на основе результатов поиска. Используй эмодзи.`,
     systemVision: caption => caption ? `Опиши фото на ЧИСТОМ русском языке, без английских слов. Учти подпись: "${caption}"` : 'Подробно опиши что изображено на фото — ТОЛЬКО на русском языке, без каких-либо английских слов.',
-    start: name => `🌟 *Привет, ${name}!* Я *NexusBot\\_777* — твой умный ИИ-помощник.\n\n🤖 Я умею:\n• 💬 Отвечать на любые вопросы\n• 🔍 Искать информацию в интернете\n• 🖼️ Анализировать фотографии\n• 🎙️ Распознавать голосовые сообщения\n\n✨ Напиши вопрос, отправь голосовое или фото!`,
-    help: `🤖 *NexusBot\\_777 — Помощь*\n\n💬 *ИИ-ответы:* просто напиши что-нибудь\n🔍 *Поиск:* _найди курс доллара_\n🎙️ *Голос:* отправь голосовое — расшифрую и отвечу\n🖼️ *Фото:* отправь фото — опишу что на нём`,
-    voiceHeard:  t => `🎙️ *Я услышал:* _${t}_`,
-    searching:   q => `🔍 Ищу: _${q}_...`,
-    searchHeader: '🔍 *Результаты поиска:*',
-    photoHeader:  '🖼️ *Анализ изображения:*',
-    noResults:    '😔 Ничего не нашёл. Попробуй сформулировать иначе.',
-    voiceNoText:  '😔 Не удалось распознать голос. Попробуй ещё раз или напиши текстом.',
-    voiceErr:     '😅 Не удалось обработать голосовое сообщение.',
-    photoErr:     '😅 Не удалось проанализировать изображение. Попробуй ещё раз!',
-    photoUnavail: '🖼️ Распознавание изображений временно недоступно. Попробуй позже!',
-    searchErr:    '😅 Не удалось выполнить поиск. Попробуй ещё раз!',
-    aiErr:        '😅 Что-то пошло не так, попробуй ещё раз!',
-    aiNoAnswer:   '😅 Не смог придумать ответ, попробуй ещё раз!',
-    searchNoAnswer: '😅 Не смог обработать результаты поиска.',
+    start: name => `🌟 *Привет, ${name}!* Я *NexusBot\\_777* — твой умный ИИ-помощник.\n\n🤖 Я умею:\n• 💬 Отвечать на любые вопросы\n• 🔍 Искать информацию в интернете\n• 🎨 Генерировать изображения по описанию\n• 🖼️ Анализировать фотографии\n• 🎙️ Распознавать голосовые сообщения\n\n✨ Напиши вопрос, отправь голосовое или фото!\n🎨 Для картинки: _нарисуй закат над морем_`,
+    help: `🤖 *NexusBot\\_777 — Помощь*\n\n💬 *ИИ-ответы:* просто напиши что-нибудь\n🔍 *Поиск:* _найди курс доллара_\n🎨 *Изображение:* _нарисуй кота в шляпе_\n🎙️ *Голос:* отправь голосовое — расшифрую и отвечу\n🖼️ *Фото:* отправь фото — опишу что на нём`,
+    voiceHeard:      t => `🎙️ *Я услышал:* _${t}_`,
+    searching:       q => `🔍 Ищу: _${q}_...`,
+    imageGenerating: p => `🎨 Рисую: _${p}_...`,
+    searchHeader:  '🔍 *Результаты поиска:*',
+    photoHeader:   '🖼️ *Анализ изображения:*',
+    noResults:     '😔 Ничего не нашёл. Попробуй сформулировать иначе.',
+    voiceNoText:   '😔 Не удалось распознать голос. Попробуй ещё раз или напиши текстом.',
+    voiceErr:      '😅 Не удалось обработать голосовое сообщение.',
+    photoErr:      '😅 Не удалось проанализировать изображение. Попробуй ещё раз!',
+    photoUnavail:  '🖼️ Распознавание изображений временно недоступно. Попробуй позже!',
+    searchErr:     '😅 Не удалось выполнить поиск. Попробуй ещё раз!',
+    imageErr:      '😅 Не удалось создать изображение. Попробуй ещё раз!',
+    aiErr:         '😅 Что-то пошло не так, попробуй ещё раз!',
+    aiNoAnswer:    '😅 Не смог придумать ответ, попробуй ещё раз!',
+    searchNoAnswer:'😅 Не смог обработать результаты поиска.',
   },
   uk: {
-    systemBot:   name => `Ти розумний і дружній Telegram-бот NexusBot_777. Відповідай ТІЛЬКИ українською мовою. Будь корисним, коротким і позитивним. Використовуй емодзі. Користувача звати ${name}. Не згадуй, що ти ШІ.`,
+    systemBot:    name => `Ти розумний і дружній Telegram-бот NexusBot_777. Відповідай ТІЛЬКИ українською мовою. Будь корисним, коротким і позитивним. Використовуй емодзі. Користувача звати ${name}. Не згадуй, що ти ШІ.`,
     systemSearch: name => `Ти помічник NexusBot_777. Відповідай ТІЛЬКИ українською мовою. Користувача звати ${name}. Склади короткий ответ на основі результатів пошуку. Використовуй емодзі.`,
     systemVision: caption => caption ? `Опиши фото. Врахуй підпис: "${caption}"` : 'Детально опиши що зображено на фото українською мовою.',
-    start: name => `🌟 *Привіт, ${name}!* Я *NexusBot\\_777* — твій розумний ІІ-помічник.\n\n🤖 Я вмію:\n• 💬 Відповідати на будь-які запитання\n• 🔍 Шукати інформацію в інтернеті\n• 🖼️ Аналізувати фотографії\n• 🎙️ Розпізнавати голосові повідомлення\n\n✨ Напиши запитання, надішли голосове або фото!`,
-    help: `🤖 *NexusBot\\_777 — Допомога*\n\n💬 *ІІ-відповіді:* просто напиши щось\n🔍 *Пошук:* _знайди курс долара_\n🎙️ *Голос:* надішли голосове — розшифрую і відповім\n🖼️ *Фото:* надішли фото — опишу що на ньому`,
-    voiceHeard:  t => `🎙️ *Я почув:* _${t}_`,
-    searching:   q => `🔍 Шукаю: _${q}_...`,
-    searchHeader: '🔍 *Результати пошуку:*',
-    photoHeader:  '🖼️ *Аналіз зображення:*',
-    noResults:    '😔 Нічого не знайшов. Спробуй сформулювати інакше.',
-    voiceNoText:  '😔 Не вдалося розпізнати голос. Спробуй ще раз або напиши текстом.',
-    voiceErr:     '😅 Не вдалося обробити голосове повідомлення.',
-    photoErr:     '😅 Не вдалося проаналізувати зображення. Спробуй ще раз!',
-    photoUnavail: '🖼️ Розпізнавання зображень тимчасово недоступне. Спробуй пізніше!',
-    searchErr:    '😅 Не вдалося виконати пошук. Спробуй ще раз!',
-    aiErr:        '😅 Щось пішло не так, спробуй ще раз!',
-    aiNoAnswer:   '😅 Не зміг придумати відповідь, спробуй ще раз!',
-    searchNoAnswer: '😅 Не зміг обробити результати пошуку.',
+    start: name => `🌟 *Привіт, ${name}!* Я *NexusBot\\_777* — твій розумний ІІ-помічник.\n\n🤖 Я вмію:\n• 💬 Відповідати на будь-які запитання\n• 🔍 Шукати інформацію в інтернеті\n• 🎨 Генерувати зображення за описом\n• 🖼️ Аналізувати фотографії\n• 🎙️ Розпізнавати голосові повідомлення\n\n✨ Напиши запитання, надішли голосове або фото!\n🎨 Для картинки: _намалюй захід сонця над морем_`,
+    help: `🤖 *NexusBot\\_777 — Допомога*\n\n💬 *ІІ-відповіді:* просто напиши щось\n🔍 *Пошук:* _знайди курс долара_\n🎨 *Зображення:* _намалюй кота в капелюсі_\n🎙️ *Голос:* надішли голосове — розшифрую і відповім\n🖼️ *Фото:* надішли фото — опишу що на ньому`,
+    voiceHeard:      t => `🎙️ *Я почув:* _${t}_`,
+    searching:       q => `🔍 Шукаю: _${q}_...`,
+    imageGenerating: p => `🎨 Малюю: _${p}_...`,
+    searchHeader:  '🔍 *Результати пошуку:*',
+    photoHeader:   '🖼️ *Аналіз зображення:*',
+    noResults:     '😔 Нічого не знайшов. Спробуй сформулювати інакше.',
+    voiceNoText:   '😔 Не вдалося розпізнати голос. Спробуй ще раз або напиши текстом.',
+    voiceErr:      '😅 Не вдалося обробити голосове повідомлення.',
+    photoErr:      '😅 Не вдалося проаналізувати зображення. Спробуй ще раз!',
+    photoUnavail:  '🖼️ Розпізнавання зображень тимчасово недоступне. Спробуй пізніше!',
+    searchErr:     '😅 Не вдалося виконати пошук. Спробуй ще раз!',
+    imageErr:      '😅 Не вдалося створити зображення. Спробуй ще раз!',
+    aiErr:         '😅 Щось пішло не так, спробуй ще раз!',
+    aiNoAnswer:    '😅 Не зміг придумати відповідь, спробуй ще раз!',
+    searchNoAnswer:'😅 Не зміг обробити результати пошуку.',
   },
   kk: {
-    systemBot:   name => `Сен NexusBot_777 деп аталатын ақылды және достық Telegram-бот. Тек қазақ тілінде жауап бер. Пайдалы, қысқа және позитивті бол. Эмодзи қолдан. Пайдаланушының аты ${name}. Жасанды интеллект екеніңді айтпа.`,
+    systemBot:    name => `Сен NexusBot_777 деп аталатын ақылды және достық Telegram-бот. Тек қазақ тілінде жауап бер. Пайдалы, қысқа және позитивті бол. Эмодзи қолдан. Пайдаланушының аты ${name}. Жасанды интеллект екеніңді айтпа.`,
     systemSearch: name => `Сен NexusBot_777 көмекшісің. Тек қазақ тілінде жауап бер. Пайдаланушының аты ${name}. Іздеу нәтижелері негізінде қысқаша жауап жаз. Эмодзи қолдан.`,
     systemVision: caption => caption ? `Суретті сипаттап бер. Қолданушының жазбасын ескер: "${caption}"` : 'Суретте не бейнеленгенін қазақ тілінде толық сипатта.',
-    start: name => `🌟 *Сәлем, ${name}!* Мен *NexusBot\\_777* — сенің ақылды ЖИ-көмекшің.\n\n🤖 Мен білемін:\n• 💬 Кез келген сұраққа жауап беру\n• 🔍 Интернеттен ақпарат іздеу\n• 🖼️ Суреттерді талдау\n• 🎙️ Дауыстық хабарларды тану\n\n✨ Сұрақ жаз, дауыстық немесе фото жібер!`,
-    help: `🤖 *NexusBot\\_777 — Көмек*\n\n💬 *ЖИ-жауаптар:* жай бірдеңе жаз\n🔍 *Іздеу:* _доллар бағамын тап_\n🎙️ *Дауыс:* дауыстық жібер — тануып жауап берем\n🖼️ *Фото:* фото жібер — сипаттап беремін`,
-    voiceHeard:  t => `🎙️ *Мен естідім:* _${t}_`,
-    searching:   q => `🔍 Іздеуде: _${q}_...`,
-    searchHeader: '🔍 *Іздеу нәтижелері:*',
-    photoHeader:  '🖼️ *Суретті талдау:*',
-    noResults:    '😔 Ештеңе таппадым. Басқаша тұжырымдап көр.',
-    voiceNoText:  '😔 Дауысты тану мүмкін болмады. Тағы бір рет көр немесе мәтін жаз.',
-    voiceErr:     '😅 Дауыстық хабарды өңдеу мүмкін болмады.',
-    photoErr:     '😅 Суретті талдау мүмкін болмады. Тағы бір рет көр!',
-    photoUnavail: '🖼️ Суреттерді тану уақытша қолжетімсіз. Кейінірек көр!',
-    searchErr:    '😅 Іздеу орындалмады. Тағы бір рет көр!',
-    aiErr:        '😅 Бірдеңе дұрыс болмады, тағы бір рет көр!',
-    aiNoAnswer:   '😅 Жауап таба алмадым, тағы бір рет көр!',
-    searchNoAnswer: '😅 Іздеу нәтижелерін өңдей алмадым.',
+    start: name => `🌟 *Сәлем, ${name}!* Мен *NexusBot\\_777* — сенің ақылды ЖИ-көмекшің.\n\n🤖 Мен білемін:\n• 💬 Кез келген сұраққа жауап беру\n• 🔍 Интернеттен ақпарат іздеу\n• 🎨 Сипаттама бойынша сурет жасау\n• 🖼️ Суреттерді талдау\n• 🎙️ Дауыстық хабарларды тану\n\n✨ Сұрақ жаз, дауыстық немесе фото жібер!\n🎨 Сурет үшін: _теңіз үстіндегі күн батысын сал_`,
+    help: `🤖 *NexusBot\\_777 — Көмек*\n\n💬 *ЖИ-жауаптар:* жай бірдеңе жаз\n🔍 *Іздеу:* _доллар бағамын тап_\n🎨 *Сурет:* _шляпадағы мысықты сал_\n🎙️ *Дауыс:* дауыстық жібер — тануып жауап берем\n🖼️ *Фото:* фото жібер — сипаттап беремін`,
+    voiceHeard:      t => `🎙️ *Мен естідім:* _${t}_`,
+    searching:       q => `🔍 Іздеуде: _${q}_...`,
+    imageGenerating: p => `🎨 Сурет жасауда: _${p}_...`,
+    searchHeader:  '🔍 *Іздеу нәтижелері:*',
+    photoHeader:   '🖼️ *Суретті талдау:*',
+    noResults:     '😔 Ештеңе таппадым. Басқаша тұжырымдап көр.',
+    voiceNoText:   '😔 Дауысты тану мүмкін болмады. Тағы бір рет көр немесе мәтін жаз.',
+    voiceErr:      '😅 Дауыстық хабарды өңдеу мүмкін болмады.',
+    photoErr:      '😅 Суретті талдау мүмкін болмады. Тағы бір рет көр!',
+    photoUnavail:  '🖼️ Суреттерді тану уақытша қолжетімсіз. Кейінірек көр!',
+    searchErr:     '😅 Іздеу орындалмады. Тағы бір рет көр!',
+    imageErr:      '😅 Суретті жасау мүмкін болмады. Тағы бір рет көр!',
+    aiErr:         '😅 Бірдеңе дұрыс болмады, тағы бір рет көр!',
+    aiNoAnswer:    '😅 Жауап таба алмадым, тағы бір рет көр!',
+    searchNoAnswer:'😅 Іздеу нәтижелерін өңдей алмадым.',
   },
   en: {
-    systemBot:   name => `You are NexusBot_777, a smart and friendly Telegram bot. Reply ONLY in English. Be helpful, concise, and positive. Use emojis where appropriate. The user's name is ${name}. Don't mention that you are an AI.`,
+    systemBot:    name => `You are NexusBot_777, a smart and friendly Telegram bot. Reply ONLY in English. Be helpful, concise, and positive. Use emojis where appropriate. The user's name is ${name}. Don't mention that you are an AI.`,
     systemSearch: name => `You are NexusBot_777 assistant. Reply ONLY in English. The user's name is ${name}. Write a short, helpful answer based on the search results. Use emojis.`,
     systemVision: caption => caption ? `Describe the photo. Also consider the user's caption: "${caption}"` : 'Describe in detail what is shown in this photo in English.',
-    start: name => `🌟 *Hello, ${name}!* I'm *NexusBot\\_777* — your smart AI assistant.\n\n🤖 I can:\n• 💬 Answer any questions\n• 🔍 Search the web for information\n• 🖼️ Analyze and describe photos\n• 🎙️ Transcribe voice messages\n\n✨ Send a message, voice note, or photo!`,
-    help: `🤖 *NexusBot\\_777 — Help*\n\n💬 *AI answers:* just write anything\n🔍 *Search:* _find bitcoin price_, _search latest news_\n🎙️ *Voice:* send a voice note — I'll transcribe and reply\n🖼️ *Photo:* send a photo — I'll describe it`,
-    voiceHeard:  t => `🎙️ *I heard:* _${t}_`,
-    searching:   q => `🔍 Searching: _${q}_...`,
-    searchHeader: '🔍 *Search results:*',
-    photoHeader:  '🖼️ *Image analysis:*',
-    noResults:    '😔 Found nothing. Try rephrasing your query.',
-    voiceNoText:  '😔 Could not recognize the voice. Try again or send a text message.',
-    voiceErr:     '😅 Could not process the voice message.',
-    photoErr:     '😅 Could not analyze the image. Please try again!',
-    photoUnavail: '🖼️ Image recognition is temporarily unavailable. Try again later!',
-    searchErr:    '😅 Search failed. Please try again!',
-    aiErr:        '😅 Something went wrong. Please try again!',
-    aiNoAnswer:   '😅 Could not come up with an answer. Please try again!',
-    searchNoAnswer: '😅 Could not process the search results.',
+    start: name => `🌟 *Hello, ${name}!* I'm *NexusBot\\_777* — your smart AI assistant.\n\n🤖 I can:\n• 💬 Answer any questions\n• 🔍 Search the web for information\n• 🎨 Generate images from a description\n• 🖼️ Analyze and describe photos\n• 🎙️ Transcribe voice messages\n\n✨ Send a message, voice note, or photo!\n🎨 For images: _draw a sunset over the ocean_`,
+    help: `🤖 *NexusBot\\_777 — Help*\n\n💬 *AI answers:* just write anything\n🔍 *Search:* _find bitcoin price_, _search latest news_\n🎨 *Image:* _draw a cat in a hat_\n🎙️ *Voice:* send a voice note — I'll transcribe and reply\n🖼️ *Photo:* send a photo — I'll describe it`,
+    voiceHeard:      t => `🎙️ *I heard:* _${t}_`,
+    searching:       q => `🔍 Searching: _${q}_...`,
+    imageGenerating: p => `🎨 Generating: _${p}_...`,
+    searchHeader:  '🔍 *Search results:*',
+    photoHeader:   '🖼️ *Image analysis:*',
+    noResults:     '😔 Found nothing. Try rephrasing your query.',
+    voiceNoText:   '😔 Could not recognize the voice. Try again or send a text message.',
+    voiceErr:      '😅 Could not process the voice message.',
+    photoErr:      '😅 Could not analyze the image. Please try again!',
+    photoUnavail:  '🖼️ Image recognition is temporarily unavailable. Try again later!',
+    searchErr:     '😅 Search failed. Please try again!',
+    imageErr:      '😅 Could not generate the image. Please try again!',
+    aiErr:         '😅 Something went wrong. Please try again!',
+    aiNoAnswer:    '😅 Could not come up with an answer. Please try again!',
+    searchNoAnswer:'😅 Could not process the search results.',
   },
 };
 
 // ── Conversation memory (last 10 messages per user) ──────────────────────────
 const MAX_HISTORY = 10;
 const conversationHistory = new Map();
-const userLanguages = new Map(); // userId → 'ru'|'uk'|'kk'|'en'
+const userLanguages = new Map();
 
 function getHistory(userId) {
   return conversationHistory.get(userId) ?? [];
@@ -139,6 +142,27 @@ function getLang(userId, text) {
   const detected = text ? detectLanguage(text) : null;
   if (detected) userLanguages.set(userId, detected);
   return userLanguages.get(userId) ?? 'ru';
+}
+
+// ── Image generation intent ───────────────────────────────────────────────────
+const IMAGE_PATTERNS = [
+  /^(нарисуй|сгенерируй картинку|создай изображение|создай картинку|изобрази)\s+/i,
+  /^(намалюй|створи зображення|згенеруй картинку|зобрази)\s+/i,
+  /^(сурет сал|сурет жаса|сурет жасап бер)\s+/i,
+  /^(draw|generate image|create image|imagine|paint|make image of)\s+/i,
+];
+
+function isImageRequest(text) {
+  return IMAGE_PATTERNS.some(p => p.test(text));
+}
+
+function extractImagePrompt(text) {
+  return text
+    .replace(/^(нарисуй|сгенерируй картинку|создай изображение|создай картинку|изобрази)\s+/i, '')
+    .replace(/^(намалюй|створи зображення|згенеруй картинку|зобрази)\s+/i, '')
+    .replace(/^(сурет сал|сурет жаса|сурет жасап бер)\s+/i, '')
+    .replace(/^(draw|generate image|create image|imagine|paint|make image of)\s+/i, '')
+    .trim();
 }
 
 // ── Search intent detection ───────────────────────────────────────────────────
@@ -172,6 +196,13 @@ function extractSearchQuery(text) {
 
 function escapeMarkdown(text) {
   return String(text).replace(/[_*[\]()~`>#+=|{}.!-]/g, '\\$&');
+}
+
+// ── Pollinations image generation ─────────────────────────────────────────────
+function buildImageUrl(prompt) {
+  const encoded = encodeURIComponent(prompt);
+  const seed = Date.now();
+  return `https://image.pollinations.ai/prompt/${encoded}?width=1024&height=1024&nologo=true&seed=${seed}`;
 }
 
 // ── DuckDuckGo search via Python ──────────────────────────────────────────────
@@ -263,9 +294,8 @@ async function transcribeVoice(buffer) {
 bot.onText(/\/start/, async msg => {
   const userId = msg.from.id;
   const lang = getLang(userId, null);
-  const t = T[lang];
   const name = msg.from?.first_name ?? 'friend';
-  await bot.sendMessage(msg.chat.id, t.start(escapeMarkdown(name)), { parse_mode: 'Markdown' });
+  await bot.sendMessage(msg.chat.id, T[lang].start(escapeMarkdown(name)), { parse_mode: 'Markdown' });
 });
 
 // ── /help ─────────────────────────────────────────────────────────────────────
@@ -294,7 +324,12 @@ bot.on('voice', async msg => {
     const t = T[lang];
     await bot.sendMessage(chatId, t.voiceHeard(escapeMarkdown(transcribed)), { parse_mode: 'Markdown' });
     await bot.sendChatAction(chatId, 'typing');
-    if (isSearchQuery(transcribed)) {
+    if (isImageRequest(transcribed)) {
+      const prompt = extractImagePrompt(transcribed);
+      await bot.sendChatAction(chatId, 'upload_photo');
+      const imageUrl = buildImageUrl(prompt);
+      await bot.sendPhoto(chatId, imageUrl, { caption: `🎨 ${prompt}` });
+    } else if (isSearchQuery(transcribed)) {
       const query = extractSearchQuery(transcribed);
       const snippets = await webSearch(query);
       if (!snippets) { await bot.sendMessage(chatId, t.noResults); return; }
@@ -344,6 +379,23 @@ bot.on('message', async msg => {
   const lang = getLang(userId, msg.text);
   const t = T[lang];
   await bot.sendChatAction(chatId, 'typing');
+
+  // ── Image generation ──
+  if (isImageRequest(msg.text)) {
+    try {
+      const prompt = extractImagePrompt(msg.text);
+      await bot.sendMessage(chatId, t.imageGenerating(escapeMarkdown(prompt)), { parse_mode: 'Markdown' });
+      await bot.sendChatAction(chatId, 'upload_photo');
+      const imageUrl = buildImageUrl(prompt);
+      await bot.sendPhoto(chatId, imageUrl, { caption: `🎨 ${prompt}` });
+    } catch (err) {
+      console.error('Image generation error:', err);
+      await bot.sendMessage(chatId, t.imageErr);
+    }
+    return;
+  }
+
+  // ── Web search ──
   if (isSearchQuery(msg.text)) {
     try {
       const query = extractSearchQuery(msg.text);
@@ -361,6 +413,8 @@ bot.on('message', async msg => {
     }
     return;
   }
+
+  // ── AI response ──
   try {
     const reply = await getAIResponse(msg.text, userName, getHistory(userId), lang);
     addToHistory(userId, 'user', msg.text);
